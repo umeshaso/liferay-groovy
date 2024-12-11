@@ -1,0 +1,68 @@
+import com.liferay.journal.model.JournalArticle;
+import com.liferay.journal.service.JournalArticleLocalServiceUtil;
+import com.liferay.portal.kernel.dao.orm.DynamicQuery;
+import com.liferay.portal.kernel.dao.orm.DynamicQueryFactoryUtil;
+import com.liferay.portal.kernel.dao.orm.OrderFactoryUtil;
+import com.liferay.portal.kernel.dao.orm.ProjectionFactoryUtil;
+import com.liferay.portal.kernel.dao.orm.PropertyFactoryUtil;
+import com.liferay.portal.kernel.exception.PortalException;
+import com.liferay.portal.kernel.model.Group;
+import com.liferay.portal.kernel.service.GroupLocalServiceUtil;
+import com.liferay.portal.kernel.util.PortalUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+import java.util.ArrayList;
+import java.util.List;
+
+final double MIN_NUMBER_FIRST_VERSIONS_KEPT = 0.0;
+final double MIN_NUMBER_LATEST_VERSIONS_KEPT = 0.0;
+final long groupId= 35271;
+
+
+    List < JournalArticle > journalArticles = JournalArticleLocalServiceUtil.getArticles(groupId);
+    for (JournalArticle journalArticle: journalArticles) {
+        if (journalArticle != null) {
+            out.println("journalArticle Title: " + journalArticle.getTitle());
+
+            DynamicQuery dq = DynamicQueryFactoryUtil.forClass(JournalArticle.class)
+                              .setProjection(ProjectionFactoryUtil.projectionList()
+									.add(ProjectionFactoryUtil.property("id"))
+									.add(ProjectionFactoryUtil.property("version"))
+									.add(ProjectionFactoryUtil.property("status")))
+										.add(PropertyFactoryUtil.forName("groupId").eq(journalArticle.getGroupId()))
+										.add(PropertyFactoryUtil.forName("articleId").eq(journalArticle.getArticleId()))
+											.addOrder(OrderFactoryUtil.asc("version"));
+
+            List < Object[] > result = JournalArticleLocalServiceUtil.dynamicQuery(dq);
+            if (result != null && !result.isEmpty()) {
+                List < Double > journalArticlesVersionsToDelete = new ArrayList < Double > ();
+
+                out.println("MIN_NUMBER_FIRST_VERSIONS_KEPT ::" + MIN_NUMBER_FIRST_VERSIONS_KEPT);
+                out.println("MIN_NUMBER_LATEST_VERSIONS_KEPT ::" + MIN_NUMBER_LATEST_VERSIONS_KEPT);
+
+                for (int i = 0; i < result.size(); i++) {
+                    double version = (double) result.get(i)[1];
+                    int status = (int) result.get(i)[2];
+                    //out.println("version ::" + version +" status ::" + status);
+
+                    if ((status == WorkflowConstants.STATUS_APPROVED) ||
+                            (status == WorkflowConstants.STATUS_EXPIRED)) {
+                        if (i < MIN_NUMBER_FIRST_VERSIONS_KEPT) {
+                            continue;
+                        }
+                        if (i >= (result.size() - MIN_NUMBER_LATEST_VERSIONS_KEPT)) {
+                            continue;
+                        }
+                        journalArticlesVersionsToDelete.add(version);
+                    }
+                }
+
+                for (double version: journalArticlesVersionsToDelete) {
+                    out.println("Deleted version ::" + version);
+                    //JournalArticleLocalServiceUtil.deleteArticle(journalArticle.getGroupId(), journalArticle.getArticleId(), version, null, null);
+                }
+            }
+        } else {
+            out.println("article not found");
+        }
+    }
